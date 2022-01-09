@@ -1,0 +1,214 @@
+#importing important lib
+
+from vpython import *
+import numpy as np
+from math import pi
+from matplotlib import pyplot as plt
+import random
+
+#definig properties of physics simulator
+k_floor = 1000
+g = vector(0,-9.81,0)
+dc = 0.99
+dt = 0.001
+center_of_mass_velocity_sum = vector(0,0,0)
+total_mass = 0
+T=0
+#c_o_v_current = 0
+c_o_v_previous = 0
+better_c_o_v_list = []
+best_morpho_comp_list = []
+a_prev = 0
+b_prev = 0
+c_prev = 0
+prev_val_para = []
+parents_list = []
+
+#screen properties for physics simulator
+screen2 = canvas(title = 'Term Project - Evolving Soft Robots (Phase B)', width = 1000, height = 700,center = vector(0,0,0), background = color.white)
+floor = box(pos = vector(0,-.1,0), size = vector(5,0.01,5), color = color.orange, texture=textures.rock, shininess = 0.2)
+lamp = local_light(pos=vector(0,2,0),color=color.white)
+
+#initiatig mass positions
+mass_init = [
+    (0,0,0),
+    (1,0,0),
+    (0,0,1),
+    (1,0,1),
+    (0,1,0),
+    (1,1,0),
+    (0,1,1),
+    (1,1,1),
+    
+    
+    
+    (2,0,0),
+    (2,0,1),
+    (2,1,0),
+    (2,1,1),
+    
+    
+    
+    (0,0,2),
+    (1,0,2),
+    (0,1,2),
+    (1,1,2),
+    
+    
+    
+#     (2,0,1),
+    (2,0,2),
+#     (2,1,1),
+    (2,1,2)
+    
+]
+
+    
+mass_position = []
+for m in mass_init:
+    mass_position.append(
+        sphere(
+            pos = vector(m[0],m[1],m[2]), 
+            color = color.red, 
+            radius = .04 , 
+            mass = .10 , 
+            velocity = vector(0,0,0), 
+            acceleration = vector(0,0,0), 
+            force = vector(0,0,0), 
+            shininess = 0.1
+            )
+    )
+
+    
+distance = []
+for i in range(len(mass_init)+1):
+    for k in range(i,len(mass_init)):
+        if (i != k):
+            natural_length = np.sqrt((mass_init[i][0]-mass_init[k][0])**2 + (mass_init[i][1]-mass_init[k][1])**2 + (mass_init[i][2]-mass_init[k][2])**2)
+            distance.append(natural_length)
+            
+
+# better_c_o_v_list = []  
+
+
+spring_properities = []
+spring_constant_list = [0,1000,2000,9000]
+spring_color_list = [color.cyan,color.blue,color.green,color.black]
+spring_opacity_list = [0,1,1,1]
+for i in range(len(mass_init)):
+    for k in range(i,len(mass_init)):
+        if (i != k):
+            random_number = random.randint(0, 3)
+            spring_prop = [spring_constant_list[random_number]] #spring constant 
+            natural_length = np.sqrt((mass_init[i][0]-mass_init[k][0])**2 + (mass_init[i][1]-mass_init[k][1])**2 + (mass_init[i][2]-mass_init[k][2])**2)
+            spring_prop.append(natural_length)
+            spring_prop.append(i) # first mass
+            spring_prop.append(k) # second mass 
+            spring_color = spring_color_list[random_number]
+            spring_prop.append(natural_length) # as later it will be replaced
+            spring_prop.append(spring_color)
+            spring_opacity = spring_opacity_list[random_number]
+            spring_prop.append(spring_opacity)
+
+            spring_properities.append(spring_prop)
+
+new_spring_properties = []
+for i in range(len(spring_properities)):
+    if spring_properities[i][1] <= 1.7320508075688772:
+        new_spring_properties.append(spring_properities[i])
+
+cylinder_list = []            
+for i in new_spring_properties:
+    cylinder_list.append(
+        cylinder(
+            pos=mass_position[i[2]].pos, 
+            axis = mass_position[i[3]].pos - mass_position[i[2]].pos, 
+            radius=.009,
+            color = i[5],
+            opacity = i[6]
+            )
+        )
+
+
+
+while T < 0.01:
+    rate(1000)
+
+    for i in new_spring_properties:
+        distance = sqrt((mass_position[i[2]].pos.x - mass_position[i[3]].pos.x)**2 + (mass_position[i[2]].pos.y - mass_position[i[3]].pos.y)**2 + (mass_position[i[2]].pos.z - mass_position[i[3]].pos.z)**2)
+
+        spring_force_scaler = i[0]*(distance - i[1])
+        spring_force_direction = norm(mass_position[i[3]].pos - mass_position[i[2]].pos)
+        spring_force = spring_force_scaler*spring_force_direction
+        mass_position[i[2]].force += spring_force
+        mass_position[i[3]].force -= spring_force
+
+
+
+    for mass_sphere in mass_position:
+        mass_sphere.force += mass_sphere.mass*g
+        dis_in_y = mass_sphere.pos.y - (floor.size.y + mass_sphere.radius )#
+
+        if dis_in_y < 0:
+
+            if np.linalg.norm(np.array([mass_sphere.force.x,0,mass_sphere.force.z])) < .8*np.linalg.norm(np.array([0,mass_sphere.force.y,0])):
+                mass_sphere.force += vector(-mass_sphere.force.x,0,-mass_sphere.force.z)
+            else:
+                mass_sphere.force += -1*.8*mass_sphere.force.y*norm(vector(mass_sphere.force.x,0,mass_sphere.force.z))
+
+            elastic_force_by_ground = vector(0,-k_floor*dis_in_y,0)
+            mass_sphere.force += elastic_force_by_ground
+
+
+    for mass_sphere in mass_position:
+        mass_sphere.acceleration = mass_sphere.force/mass_sphere.mass
+        mass_sphere.velocity = dc*mass_sphere.velocity + mass_sphere.acceleration*dt
+        mass_sphere.pos += mass_sphere.velocity*dt
+
+        mass_sphere.force = vector(0,0,0)
+
+
+
+    for i in range(len((cylinder_list))):
+        cylinder_list[i].pos = mass_position[new_spring_properties[i][2]].pos
+        cylinder_list[i].axis = mass_position[new_spring_properties[i][3]].pos - mass_position[new_spring_properties[i][2]].pos
+
+
+    for mass_sphere in mass_position:
+        center_of_mass_velocity_sum += mass_sphere.mass*mass_sphere.velocity
+        total_mass += mass_sphere.mass
+
+    center_of_mass_velocity = center_of_mass_velocity_sum/total_mass
+    #c_o_v_current = (mag(vector(center_of_mass_velocity.x,0,center_of_mass_velocity.z)))
+    c_o_v_current = center_of_mass_velocity.x
+    #print(center_of_mass_velocity)
+
+    for i in range(len(new_spring_properties)):
+        try:
+            new_spring_properties[i][1] = new_spring_properties[i][4] + prev_val_para[i][0]*np.sin(prev_val_para[i][1]*T+prev_val_para[i][2])
+        except:
+            pass
+
+
+        if c_o_v_current > c_o_v_previous:
+            c_o_v_previous = c_o_v_current
+            better_c_o_v_list.append(c_o_v_previous)
+            prev_val_para=[]
+            for i in range(len(new_spring_properties)):
+                a = [np.random.uniform(.01,0.03)]
+                b = np.random.uniform(4.5,5)
+                c = np.random.uniform(0,.01)
+                new_spring_properties[i][1]=new_spring_properties[i][4]+ a[0]*np.sin(b*T+c)
+                a.append(b)
+                a.append(c)
+                prev_val_para.append(a)
+
+
+
+    better_c_o_v_list.append(c_o_v_previous)
+
+#         print(c_o_v_previous)
+    T+=dt
+
+
+best_morpho_comp_list.append(better_c_o_v_list)
